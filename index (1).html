@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library Management System</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; background: #f2f4f8; color: #222; font-size: 15px; }
+h2 { margin-top: 0; }
+button { cursor: pointer; padding: 8px 14px; border: none; border-radius: 4px; background: #2f6fed; color: white; font-size: 14px; }
+button:hover { background: #1f58c7; }
+button.red { background: #d9534f; }
+button.green { background: #2e9d5b; }
+button.grey { background: #888; }
+input, select { padding: 8px; border: 1px solid #bbb; border-radius: 4px; font-size: 14px; width: 100%; }
+label { font-size: 13px; font-weight: bold; display: block; margin-bottom: 3px; }
+
+/* login */
+#loginBox { width: 340px; margin: 100px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px #0002; }
+#loginBox input { margin-bottom: 12px; }
+#loginBox button { width: 100%; }
+.error { color: #d9534f; font-size: 13px; margin-bottom: 10px; }
+
+/* layout */
+#app { display: none; }
+#sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 210px; background: #1e2a44; color: white; padding-top: 15px; }
+#sidebar h3 { text-align: center; margin: 0 0 20px; }
+#sidebar a { display: block; padding: 12px 20px; color: #cfd8ea; text-decoration: none; cursor: pointer; }
+#sidebar a:hover, #sidebar a.active { background: #2f6fed; color: white; }
+#content { margin-left: 210px; padding: 20px; }
+#topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+
+.card { background: white; padding: 18px; border-radius: 8px; box-shadow: 0 1px 4px #0001; margin-bottom: 20px; }
+.stats { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; }
+.stat { flex: 1; min-width: 150px; background: white; padding: 18px; border-radius: 8px; box-shadow: 0 1px 4px #0001; border-top: 4px solid #2f6fed; }
+.stat b { display: block; font-size: 28px; }
+.stat.green { border-color: #2e9d5b; } .stat.orange { border-color: #f0a030; } .stat.purple { border-color: #8a5cd0; } .stat.red { border-color: #d9534f; }
+
+.formrow { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.formrow div { flex: 1; min-width: 150px; }
+.searchrow { display: flex; gap: 10px; margin-bottom: 10px; }
+.searchrow input { flex: 2; } .searchrow select { flex: 1; }
+
+table { width: 100%; border-collapse: collapse; }
+th { background: #e8ecf4; text-align: left; padding: 9px; font-size: 13px; }
+td { padding: 9px; border-bottom: 1px solid #e5e5e5; }
+tr.overdue td { background: #ffe3e3; color: #a02020; }
+.wrap { overflow-x: auto; }
+.tag { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #e0e8fb; }
+
+#msg { position: fixed; top: 15px; right: 15px; padding: 12px 18px; border-radius: 5px; color: white; display: none; z-index: 10; }
+
+@media (max-width: 750px) {
+  #sidebar { position: static; width: 100%; display: flex; flex-wrap: wrap; padding: 0; }
+  #sidebar h3 { width: 100%; padding: 10px; margin: 0; }
+  #sidebar a { padding: 10px 12px; }
+  #content { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<div id="msg"></div>
+
+<!-- LOGIN -->
+<div id="loginBox">
+  <h2>Library Login</h2>
+  <p style="font-size:13px;color:#666">Demo: admin / admin123</p>
+  <label>Username</label><input id="username">
+  <label>Password</label><input id="password" type="password">
+  <div class="error" id="loginError"></div>
+  <button onclick="login()">Login</button>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div id="sidebar">
+    <h3>📚 Library System</h3>
+    <a id="nav-dashboard" onclick="showPage('dashboard')">🏠 Dashboard</a>
+    <a id="nav-books" onclick="showPage('books')">📖 Books</a>
+    <a id="nav-students" onclick="showPage('students')">🎓 Students</a>
+    <a id="nav-issue" onclick="showPage('issue')">📤 Issue Book</a>
+    <a id="nav-return" onclick="showPage('return')">📥 Return Book</a>
+    <a id="nav-reports" onclick="showPage('reports')">📊 Reports</a>
+  </div>
+
+  <div id="content">
+    <div id="topbar">
+      <h2 id="pageTitle">Dashboard</h2>
+      <div>Welcome, Admin &nbsp; <button class="grey" onclick="logout()">Logout</button></div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="page-dashboard">
+      <div class="stats" id="stats"></div>
+      <div class="card">
+        <h3>Overdue Books</h3>
+        <div class="wrap"><table><thead><tr><th>Book</th><th>Student</th><th>Due Date</th><th>Days Late</th></tr></thead><tbody id="overdueTable"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- Books -->
+    <div id="page-books">
+      <div class="card">
+        <h3 id="bookFormTitle">Add Book</h3>
+        <div class="formrow">
+          <div><label>Book ID</label><input id="bId"></div>
+          <div><label>Title</label><input id="bTitle"></div>
+          <div><label>Author</label><input id="bAuthor"></div>
+        </div>
+        <div class="formrow">
+          <div><label>ISBN (10 or 13 digits)</label><input id="bIsbn"></div>
+          <div><label>Category</label>
+            <select id="bCategory">
+              <option>Fiction</option><option>Science</option><option>Technology</option>
+              <option>History</option><option>Biography</option><option>Self-Help</option><option>Mathematics</option>
+            </select></div>
+          <div><label>Quantity</label><input id="bQty" type="number" min="1" value="1"></div>
+        </div>
+        <button onclick="saveBook()">Save Book</button>
+        <button class="grey" onclick="clearBookForm()">Clear</button>
+      </div>
+      <div class="card">
+        <div class="searchrow">
+          <input id="bookSearch" placeholder="Search by title, author, ISBN or ID..." oninput="showBooks()">
+          <select id="bookFilter" onchange="showBooks()"></select>
+        </div>
+        <div class="wrap"><table>
+          <thead><tr><th>ID</th><th>Title</th><th>Author</th><th>ISBN</th><th>Category</th><th>Qty</th><th>Available</th><th>Actions</th></tr></thead>
+          <tbody id="bookTable"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- Students -->
+    <div id="page-students">
+      <div class="card">
+        <h3 id="studentFormTitle">Add Student</h3>
+        <div class="formrow">
+          <div><label>Student ID</label><input id="sId"></div>
+          <div><label>Name</label><input id="sName"></div>
+          <div><label>Course</label><input id="sCourse"></div>
+          <div><label>Email</label><input id="sEmail"></div>
+        </div>
+        <button onclick="saveStudent()">Save Student</button>
+        <button class="grey" onclick="clearStudentForm()">Clear</button>
+      </div>
+      <div class="card">
+        <div class="searchrow"><input id="studentSearch" placeholder="Search students..." oninput="showStudents()"></div>
+        <div class="wrap"><table>
+          <thead><tr><th>ID</th><th>Name</th><th>Course</th><th>Email</th><th>Actions</th></tr></thead>
+          <tbody id="studentTable"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- Issue -->
+    <div id="page-issue">
+      <div class="card">
+        <h3>Issue a Book</h3>
+        <div class="formrow">
+          <div><label>Student</label><select id="issueStudent"></select></div>
+          <div><label>Book (available only)</label><select id="issueBook"></select></div>
+          <div><label>Issue Date</label><input id="issueDate" type="date" onchange="setDueDate()"></div>
+          <div><label>Due Date</label><input id="dueDate" type="date"></div>
+        </div>
+        <button onclick="issueBook()">Issue Book</button>
+      </div>
+      <div class="card">
+        <h3>Recent Issues</h3>
+        <div class="wrap"><table>
+          <thead><tr><th>Book</th><th>Student</th><th>Issued</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody id="recentTable"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- Return -->
+    <div id="page-return">
+      <div class="card">
+        <div class="searchrow"><input id="returnSearch" placeholder="Search by book or student..." oninput="showReturns()"></div>
+        <div class="wrap"><table>
+          <thead><tr><th>Book</th><th>Student</th><th>Issued</th><th>Due</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="returnTable"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- Reports -->
+    <div id="page-reports">
+      <div class="card">
+        <div class="searchrow">
+          <select id="reportType" onchange="showReport()">
+            <option value="issued">Issued Books</option>
+            <option value="returned">Returned Books</option>
+            <option value="available">Available Books</option>
+            <option value="overdue">Overdue Books</option>
+          </select>
+          <button class="green" onclick="exportCSV()">Export CSV</button>
+        </div>
+        <div class="wrap"><table>
+          <thead id="reportHead"></thead>
+          <tbody id="reportBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- Data ----------
+function dateOffset(days) {
+  var d = new Date();
+  d.setDate(d.getDate() + days);
+  var m = String(d.getMonth() + 1).padStart(2, "0");
+  var day = String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + m + "-" + day;
+}
+var today = dateOffset(0);
+
+function sampleData() {
+  return {
+    books: [
+      { id: "B001", title: "The Pragmatic Programmer", author: "Andrew Hunt", isbn: "9780135957059", category: "Technology", qty: 4 },
+      { id: "B002", title: "Clean Code", author: "Robert C. Martin", isbn: "9780132350884", category: "Technology", qty: 3 },
+      { id: "B003", title: "Sapiens", author: "Yuval Noah Harari", isbn: "9780062316110", category: "History", qty: 2 },
+      { id: "B004", title: "A Brief History of Time", author: "Stephen Hawking", isbn: "9780553380163", category: "Science", qty: 3 },
+      { id: "B005", title: "The Selfish Gene", author: "Richard Dawkins", isbn: "9780198788607", category: "Science", qty: 2 },
+      { id: "B006", title: "To Kill a Mockingbird", author: "Harper Lee", isbn: "9780061120084", category: "Fiction", qty: 5 },
+      { id: "B007", title: "1984", author: "George Orwell", isbn: "9780451524935", category: "Fiction", qty: 3 },
+      { id: "B008", title: "Atomic Habits", author: "James Clear", isbn: "9780735211292", category: "Self-Help", qty: 4 },
+      { id: "B009", title: "Wings of Fire", author: "A.P.J. Abdul Kalam", isbn: "9788173711466", category: "Biography", qty: 3 },
+      { id: "B010", title: "Introduction to Algorithms", author: "Thomas Cormen", isbn: "9780262046305", category: "Technology", qty: 2 }
+    ],
+    students: [
+      { id: "S1001", name: "Aarav Sharma", course: "B.Tech CSE", email: "aarav@college.edu" },
+      { id: "S1002", name: "Priya Verma", course: "MBA", email: "priya@college.edu" },
+      { id: "S1003", name: "Rohan Gupta", course: "B.Sc Physics", email: "rohan@college.edu" },
+      { id: "S1004", name: "Simran Kaur", course: "B.A. History", email: "simran@college.edu" },
+      { id: "S1005", name: "Karan Singh", course: "B.Tech ECE", email: "karan@college.edu" },
+      { id: "S1006", name: "Neha Joshi", course: "M.Sc Maths", email: "neha@college.edu" }
+    ],
+    issues: [
+      { id: 1, bookId: "B003", studentId: "S1001", issueDate: dateOffset(-20), dueDate: dateOffset(-6), returnDate: "" },
+      { id: 2, bookId: "B001", studentId: "S1002", issueDate: dateOffset(-5), dueDate: dateOffset(9), returnDate: "" },
+      { id: 3, bookId: "B007", studentId: "S1003", issueDate: dateOffset(-18), dueDate: dateOffset(-4), returnDate: "" },
+      { id: 4, bookId: "B010", studentId: "S1004", issueDate: dateOffset(-3), dueDate: dateOffset(11), returnDate: "" },
+      { id: 5, bookId: "B002", studentId: "S1005", issueDate: dateOffset(-30), dueDate: dateOffset(-16), returnDate: dateOffset(-18) },
+      { id: 6, bookId: "B005", studentId: "S1001", issueDate: dateOffset(-25), dueDate: dateOffset(-11), returnDate: dateOffset(-12) },
+      { id: 7, bookId: "B004", studentId: "S1006", issueDate: dateOffset(-2), dueDate: dateOffset(12), returnDate: "" }
+    ]
+  };
+}
+
+var data;
+try { data = JSON.parse(localStorage.getItem("libraryData")); } catch (e) { data = null; }
+if (!data || !data.books) { data = sampleData(); saveData(); }
+
+function saveData() { localStorage.setItem("libraryData", JSON.stringify(data)); }
+
+// ---------- Helper functions ----------
+function getBook(id) { return data.books.find(function (b) { return b.id === id; }); }
+function getStudent(id) { return data.students.find(function (s) { return s.id === id; }); }
+function bookTitle(id) { var b = getBook(id); return b ? b.title : "(deleted book)"; }
+function studentName(id) { var s = getStudent(id); return s ? s.name : "(deleted student)"; }
+
+function issuedCount(bookId) {
+  return data.issues.filter(function (i) { return i.bookId === bookId && !i.returnDate; }).length;
+}
+function availableCount(book) { return book.qty - issuedCount(book.id); }
+function isOverdue(i) { return !i.returnDate && i.dueDate < today; }
+function daysLate(i) {
+  if (!isOverdue(i)) return 0;
+  return Math.round((new Date(today) - new Date(i.dueDate)) / 86400000);
+}
+function $(id) { return document.getElementById(id); }
+function clean(text) {
+  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function message(text, ok) {
+  var box = $("msg");
+  box.innerText = text;
+  box.style.background = ok ? "#2e9d5b" : "#d9534f";
+  box.style.display = "block";
+  setTimeout(function () { box.style.display = "none"; }, 3000);
+}
+
+// ---------- Login ----------
+function login() {
+  var u = $("username").value.trim(), p = $("password").value;
+  if (u === "" || p === "") { $("loginError").innerText = "Please enter username and password."; return; }
+  if (u === "admin" && p === "admin123") {
+    sessionStorage.setItem("loggedIn", "yes");
+    startApp();
+  } else {
+    $("loginError").innerText = "Wrong username or password.";
+  }
+}
+function logout() {
+  sessionStorage.removeItem("loggedIn");
+  $("app").style.display = "none";
+  $("loginBox").style.display = "block";
+  $("password").value = "";
+}
+function startApp() {
+  $("loginBox").style.display = "none";
+  $("app").style.display = "block";
+  showPage("dashboard");
+}
+$("password").addEventListener("keydown", function (e) { if (e.key === "Enter") login(); });
+
+// ---------- Pages ----------
+var pages = ["dashboard", "books", "students", "issue", "return", "reports"];
+var titles = { dashboard: "Dashboard", books: "Book Management", students: "Student Management", issue: "Issue Books", "return": "Return Books", reports: "Reports" };
+
+function showPage(name) {
+  pages.forEach(function (p) {
+    $("page-" + p).style.display = (p === name) ? "block" : "none";
+    $("nav-" + p).className = (p === name) ? "active" : "";
+  });
+  $("pageTitle").innerText = titles[name];
+  if (name === "dashboard") showDashboard();
+  if (name === "books") { fillCategoryFilter(); showBooks(); }
+  if (name === "students") showStudents();
+  if (name === "issue") showIssuePage();
+  if (name === "return") showReturns();
+  if (name === "reports") showReport();
+}
+
+// ---------- Dashboard ----------
+function showDashboard() {
+  var total = 0;
+  data.books.forEach(function (b) { total += b.qty; });
+  var issued = data.issues.filter(function (i) { return !i.returnDate; }).length;
+  var overdue = data.issues.filter(isOverdue);
+
+  $("stats").innerHTML =
+    '<div class="stat"><b>' + total + '</b>Total Books</div>' +
+    '<div class="stat green"><b>' + (total - issued) + '</b>Available Books</div>' +
+    '<div class="stat orange"><b>' + issued + '</b>Issued Books</div>' +
+    '<div class="stat purple"><b>' + data.students.length + '</b>Registered Students</div>' +
+    '<div class="stat red"><b>' + overdue.length + '</b>Overdue Books</div>';
+
+  var html = "";
+  overdue.forEach(function (i) {
+    html += '<tr class="overdue"><td>' + clean(bookTitle(i.bookId)) + '</td><td>' + clean(studentName(i.studentId)) +
+      '</td><td>' + i.dueDate + '</td><td>' + daysLate(i) + '</td></tr>';
+  });
+  $("overdueTable").innerHTML = html || '<tr><td colspan="4">No overdue books.</td></tr>';
+}
+
+// ---------- Books ----------
+var editingBook = null;
+
+function fillCategoryFilter() {
+  var cats = [];
+  data.books.forEach(function (b) { if (cats.indexOf(b.category) === -1) cats.push(b.category); });
+  cats.sort();
+  var current = $("bookFilter").value;
+  var html = '<option value="">All Categories</option>';
+  cats.forEach(function (c) { html += '<option>' + clean(c) + '</option>'; });
+  $("bookFilter").innerHTML = html;
+  $("bookFilter").value = current;
+}
+
+function showBooks() {
+  var search = $("bookSearch").value.toLowerCase();
+  var cat = $("bookFilter").value;
+  var html = "";
+  data.books.forEach(function (b) {
+    var text = (b.id + b.title + b.author + b.isbn).toLowerCase();
+    if (text.indexOf(search) === -1) return;
+    if (cat && b.category !== cat) return;
+    html += '<tr><td>' + clean(b.id) + '</td><td>' + clean(b.title) + '</td><td>' + clean(b.author) + '</td><td>' + clean(b.isbn) +
+      '</td><td><span class="tag">' + clean(b.category) + '</span></td><td>' + b.qty + '</td><td>' + availableCount(b) +
+      '</td><td><button onclick="editBook(\'' + b.id + '\')">Edit</button> <button class="red" onclick="deleteBook(\'' + b.id + '\')">Delete</button></td></tr>';
+  });
+  $("bookTable").innerHTML = html || '<tr><td colspan="8">No books found.</td></tr>';
+}
+
+function saveBook() {
+  var id = $("bId").value.trim().toUpperCase();
+  var title = $("bTitle").value.trim();
+  var author = $("bAuthor").value.trim();
+  var isbn = $("bIsbn").value.trim();
+  var category = $("bCategory").value;
+  var qty = parseInt($("bQty").value);
+  var digits = isbn.replace(/[-\s]/g, "");
+
+  if (!id || !title || !author || !isbn) { message("Please fill in all fields.", false); return; }
+  if (!/^(\d{10}|\d{13})$/.test(digits)) { message("ISBN must be 10 or 13 digits.", false); return; }
+  if (isNaN(qty) || qty < 1) { message("Quantity must be 1 or more.", false); return; }
+  if (!editingBook && getBook(id)) { message("This Book ID already exists.", false); return; }
+  if (editingBook && qty < issuedCount(editingBook)) { message("Quantity cannot be less than the " + issuedCount(editingBook) + " copies currently issued.", false); return; }
+
+  var newBook = { id: id, title: title, author: author, isbn: isbn, category: category, qty: qty };
+  if (editingBook) {
+    var index = data.books.findIndex(function (b) { return b.id === editingBook; });
+    data.books[index] = newBook;
+    message("Book updated successfully.", true);
+  } else {
+    data.books.push(newBook);
+    message("Book added successfully.", true);
+  }
+  saveData();
+  clearBookForm();
+  fillCategoryFilter();
+  showBooks();
+}
+
+function editBook(id) {
+  var b = getBook(id);
+  editingBook = id;
+  $("bId").value = b.id; $("bId").disabled = true;
+  $("bTitle").value = b.title; $("bAuthor").value = b.author; $("bIsbn").value = b.isbn;
+  $("bCategory").value = b.category; $("bQty").value = b.qty;
+  $("bookFormTitle").innerText = "Edit Book";
+  window.scrollTo(0, 0);
+}
+
+function clearBookForm() {
+  editingBook = null;
+  $("bId").disabled = false;
+  ["bId", "bTitle", "bAuthor", "bIsbn"].forEach(function (f) { $(f).value = ""; });
+  $("bQty").value = 1;
+  $("bookFormTitle").innerText = "Add Book";
+}
+
+function deleteBook(id) {
+  if (issuedCount(id) > 0) { message("Cannot delete: this book is currently issued to a student.", false); return; }
+  if (!confirm("Delete this book?")) return;
+  data.books = data.books.filter(function (b) { return b.id !== id; });
+  saveData();
+  message("Book deleted.", true);
+  showBooks();
+}
+
+// ---------- Students ----------
+var editingStudent = null;
+
+function showStudents() {
+  var search = $("studentSearch").value.toLowerCase();
+  var html = "";
+  data.students.forEach(function (s) {
+    if ((s.id + s.name + s.course + s.email).toLowerCase().indexOf(search) === -1) return;
+    html += '<tr><td>' + clean(s.id) + '</td><td>' + clean(s.name) + '</td><td>' + clean(s.course) + '</td><td>' + clean(s.email) +
+      '</td><td><button onclick="editStudent(\'' + s.id + '\')">Edit</button> <button class="red" onclick="deleteStudent(\'' + s.id + '\')">Delete</button></td></tr>';
+  });
+  $("studentTable").innerHTML = html || '<tr><td colspan="5">No students found.</td></tr>';
+}
+
+function saveStudent() {
+  var id = $("sId").value.trim().toUpperCase();
+  var name = $("sName").value.trim();
+  var course = $("sCourse").value.trim();
+  var email = $("sEmail").value.trim().toLowerCase();
+
+  if (!id || !name || !course || !email) { message("Please fill in all fields.", false); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { message("Please enter a valid email.", false); return; }
+  if (!editingStudent && getStudent(id)) { message("This Student ID already exists.", false); return; }
+
+  var s = { id: id, name: name, course: course, email: email };
+  if (editingStudent) {
+    var index = data.students.findIndex(function (x) { return x.id === editingStudent; });
+    data.students[index] = s;
+    message("Student updated successfully.", true);
+  } else {
+    data.students.push(s);
+    message("Student added successfully.", true);
+  }
+  saveData();
+  clearStudentForm();
+  showStudents();
+}
+
+function editStudent(id) {
+  var s = getStudent(id);
+  editingStudent = id;
+  $("sId").value = s.id; $("sId").disabled = true;
+  $("sName").value = s.name; $("sCourse").value = s.course; $("sEmail").value = s.email;
+  $("studentFormTitle").innerText = "Edit Student";
+  window.scrollTo(0, 0);
+}
+
+function clearStudentForm() {
+  editingStudent = null;
+  $("sId").disabled = false;
+  ["sId", "sName", "sCourse", "sEmail"].forEach(function (f) { $(f).value = ""; });
+  $("studentFormTitle").innerText = "Add Student";
+}
+
+function deleteStudent(id) {
+  var active = data.issues.filter(function (i) { return i.studentId === id && !i.returnDate; }).length;
+  if (active > 0) { message("Cannot delete: this student still has issued books.", false); return; }
+  if (!confirm("Delete this student?")) return;
+  data.students = data.students.filter(function (s) { return s.id !== id; });
+  saveData();
+  message("Student deleted.", true);
+  showStudents();
+}
+
+// ---------- Issue ----------
+function showIssuePage() {
+  var sHtml = '<option value="">-- Select student --</option>';
+  data.students.forEach(function (s) { sHtml += '<option value="' + clean(s.id) + '">' + clean(s.id) + " - " + clean(s.name) + '</option>'; });
+  $("issueStudent").innerHTML = sHtml;
+
+  var bHtml = '<option value="">-- Select book --</option>';
+  data.books.forEach(function (b) {
+    if (availableCount(b) > 0) bHtml += '<option value="' + clean(b.id) + '">' + clean(b.title) + " (" + availableCount(b) + " left)</option>";
+  });
+  $("issueBook").innerHTML = bHtml;
+
+  $("issueDate").value = today;
+  $("dueDate").value = dateOffset(14);
+
+  var html = "";
+  data.issues.slice(-6).reverse().forEach(function (i) {
+    html += '<tr class="' + (isOverdue(i) ? "overdue" : "") + '"><td>' + clean(bookTitle(i.bookId)) + '</td><td>' + clean(studentName(i.studentId)) +
+      '</td><td>' + i.issueDate + '</td><td>' + i.dueDate + '</td><td>' + statusText(i) + '</td></tr>';
+  });
+  $("recentTable").innerHTML = html || '<tr><td colspan="5">No records yet.</td></tr>';
+}
+
+function setDueDate() {
+  var d = new Date($("issueDate").value);
+  if (isNaN(d)) return;
+  d.setDate(d.getDate() + 14);
+  $("dueDate").value = d.toISOString().slice(0, 10);
+}
+
+function statusText(i) {
+  if (i.returnDate) return "Returned";
+  if (isOverdue(i)) return "Overdue";
+  return "Issued";
+}
+
+function issueBook() {
+  var studentId = $("issueStudent").value;
+  var bookId = $("issueBook").value;
+  var issueDate = $("issueDate").value;
+  var dueDate = $("dueDate").value;
+
+  if (!studentId) { message("Please select a student.", false); return; }
+  if (!bookId) { message("Please select a book.", false); return; }
+  if (!issueDate || !dueDate) { message("Please choose issue and due dates.", false); return; }
+  if (dueDate < issueDate) { message("Due date cannot be before the issue date.", false); return; }
+
+  var book = getBook(bookId);
+  if (!book || availableCount(book) < 1) { message("This book is not available.", false); return; }
+  var already = data.issues.some(function (i) { return i.studentId === studentId && i.bookId === bookId && !i.returnDate; });
+  if (already) { message("This student already has a copy of this book.", false); return; }
+
+  var nextId = 1;
+  data.issues.forEach(function (i) { if (i.id >= nextId) nextId = i.id + 1; });
+  data.issues.push({ id: nextId, bookId: bookId, studentId: studentId, issueDate: issueDate, dueDate: dueDate, returnDate: "" });
+  saveData();
+  message('"' + book.title + '" issued to ' + studentName(studentId) + ".", true);
+  showIssuePage();
+}
+
+// ---------- Return ----------
+function showReturns() {
+  var search = $("returnSearch").value.toLowerCase();
+  var html = "";
+  data.issues.forEach(function (i) {
+    if (i.returnDate) return;
+    if ((bookTitle(i.bookId) + studentName(i.studentId)).toLowerCase().indexOf(search) === -1) return;
+    html += '<tr class="' + (isOverdue(i) ? "overdue" : "") + '"><td>' + clean(bookTitle(i.bookId)) + '</td><td>' + clean(studentName(i.studentId)) +
+      '</td><td>' + i.issueDate + '</td><td>' + i.dueDate + '</td><td>' + statusText(i) +
+      (isOverdue(i) ? " (" + daysLate(i) + " days late)" : "") +
+      '</td><td><button class="green" onclick="returnBook(' + i.id + ')">Return</button></td></tr>';
+  });
+  $("returnTable").innerHTML = html || '<tr><td colspan="6">No issued books to return.</td></tr>';
+}
+
+function returnBook(id) {
+  var rec = data.issues.find(function (i) { return i.id === id; });
+  if (!rec) return;
+  if (!confirm('Mark "' + bookTitle(rec.bookId) + '" as returned?')) return;
+  rec.returnDate = today;
+  saveData();
+  message("Book returned successfully.", true);
+  showReturns();
+}
+
+// ---------- Reports ----------
+var reportHeaders = [];
+var reportRows = [];
+
+function showReport() {
+  var type = $("reportType").value;
+  var rows = [];
+  var overdueFlags = [];
+
+  if (type === "available") {
+    reportHeaders = ["Book ID", "Title", "Author", "Category", "Total", "Issued", "Available"];
+    data.books.forEach(function (b) {
+      rows.push([b.id, b.title, b.author, b.category, b.qty, issuedCount(b.id), availableCount(b)]);
+      overdueFlags.push(false);
+    });
+  } else {
+    reportHeaders = ["Book", "Student", "Issue Date", "Due Date", "Return Date", "Status"];
+    data.issues.forEach(function (i) {
+      var show = (type === "issued" && !i.returnDate) || (type === "returned" && i.returnDate) || (type === "overdue" && isOverdue(i));
+      if (!show) return;
+      rows.push([bookTitle(i.bookId), studentName(i.studentId), i.issueDate, i.dueDate, i.returnDate || "-", statusText(i)]);
+      overdueFlags.push(isOverdue(i));
+    });
+  }
+  reportRows = rows;
+
+  var head = "<tr>";
+  reportHeaders.forEach(function (h) { head += "<th>" + h + "</th>"; });
+  $("reportHead").innerHTML = head + "</tr>";
+
+  var body = "";
+  rows.forEach(function (r, index) {
+    body += '<tr class="' + (overdueFlags[index] ? "overdue" : "") + '">';
+    r.forEach(function (c) { body += "<td>" + clean(c) + "</td>"; });
+    body += "</tr>";
+  });
+  $("reportBody").innerHTML = body || '<tr><td colspan="' + reportHeaders.length + '">No records found.</td></tr>';
+}
+
+function exportCSV() {
+  if (reportRows.length === 0) { message("No records to export.", false); return; }
+  var lines = [reportHeaders];
+  reportRows.forEach(function (r) { lines.push(r); });
+  var csv = lines.map(function (row) {
+    return row.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(",");
+  }).join("\n");
+
+  var blob = new Blob([csv], { type: "text/csv" });
+  var link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = $("reportType").value + "_report.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  message("CSV file downloaded.", true);
+}
+
+// ---------- Start ----------
+if (sessionStorage.getItem("loggedIn") === "yes") startApp();
+</script>
+</body>
+</html>
